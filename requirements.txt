@@ -1,0 +1,15 @@
+sentence-transformers
+numpy
+ollama
+pypdf
+python-docx
+openpyxl
+faiss-cpu
+Pillow
+diffusers
+accelerate
+transformers
+fastapi
+uvicorn[standard]
+gradio
+pytest
