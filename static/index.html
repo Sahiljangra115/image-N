@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maya RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* semantic tokens from the design system, light + dark */
+    :root {
+      --primary: #475569;
+      --accent: #2563EB;
+      --bg: #F8FAFC;
+      --fg: #1E293B;
+      --muted: #EAEFF3;
+      --border: #E2E8F0;
+      --surface: #FFFFFF;
+      --on-accent: #FFFFFF;
+      --radius: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #94A3B8;
+        --accent: #3B82F6;
+        --bg: #0F172A;
+        --fg: #E2E8F0;
+        --muted: #1E293B;
+        --border: #334155;
+        --surface: #1E293B;
+        --on-accent: #FFFFFF;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+    header {
+      padding: 20px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header p { margin: 4px 0 0; font-size: 13px; color: var(--primary); }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .msg { display: flex; flex-direction: column; gap: 6px; }
+    .msg .role { font-size: 12px; font-weight: 600; color: var(--primary); }
+    .bubble {
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .you .bubble { background: var(--accent); color: var(--on-accent); align-self: flex-end; max-width: 85%; }
+    .you { align-items: flex-end; }
+    .rag .bubble { background: var(--surface); border: 1px solid var(--border); }
+    .sources {
+      font-size: 12px;
+      color: var(--primary);
+      border-top: 1px dashed var(--border);
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+    .sources details { cursor: pointer; }
+    .sources pre { white-space: pre-wrap; margin: 6px 0 0; font-size: 11px; opacity: 0.85; }
+    /* typing dots */
+    .dots span {
+      display: inline-block; width: 6px; height: 6px; margin-right: 3px;
+      border-radius: 50%; background: var(--primary);
+      animation: blink 1.2s infinite both;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .dots span { animation: none; } }
+
+    form {
+      position: sticky; bottom: 0;
+      width: 100%; max-width: 720px; margin: 0 auto;
+      padding: 12px 16px;
+      display: flex; gap: 8px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+    input {
+      flex: 1;
+      font: inherit;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--fg);
+      min-height: 44px;
+    }
+    input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button {
+      font: inherit; font-weight: 600;
+      padding: 0 18px; min-height: 44px;
+      border: none; border-radius: var(--radius);
+      background: var(--accent); color: var(--on-accent);
+      cursor: pointer;
+      transition: opacity 150ms ease;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Maya RAG</h1>
+    <p>Ask about the bakery binder. Answers come only from the documents.</p>
+  </header>
+
+  <main id="chat" aria-live="polite">
+    <div class="msg rag">
+      <span class="role">RAG</span>
+      <div class="bubble">Ask me anything about Maya's bakery. Try: "Which cake is safe for a nut allergy?"</div>
+    </div>
+  </main>
+
+  <form id="form">
+    <label for="q" class="visually-hidden" style="position:absolute;left:-9999px;">Your question</label>
+    <input id="q" name="q" type="text" autocomplete="off" placeholder="Type your question..." required />
+    <button id="send" type="submit">Ask</button>
+  </form>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("form");
+    const input = document.getElementById("q");
+    const send = document.getElementById("send");
+
+    function addMessage(role, text) {
+      const wrap = document.createElement("div");
+      wrap.className = "msg " + (role === "You" ? "you" : "rag");
+      const label = document.createElement("span");
+      label.className = "role";
+      label.textContent = role;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      wrap.append(label, bubble);
+      chat.append(wrap);
+      chat.scrollTop = chat.scrollHeight;
+      return bubble;
+    }
+
+    function addSources(bubble, sources) {
+      if (!sources || !sources.length) return;
+      const box = document.createElement("div");
+      box.className = "sources";
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = `${sources.length} source chunk(s)`;
+      details.append(summary);
+      sources.forEach((s) => {
+        const pre = document.createElement("pre");
+        pre.textContent = s;
+        details.append(pre);
+      });
+      box.append(details);
+      bubble.parentElement.append(box);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = input.value.trim();
+      if (!query) return;
+
+      addMessage("You", query);
+      input.value = "";
+      send.disabled = true;
+
+      // typing indicator
+      const thinking = addMessage("RAG", "");
+      thinking.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        if (!res.ok) throw new Error("Server error " + res.status);
+        const data = await res.json();
+        thinking.textContent = data.answer;
+        addSources(thinking, data.sources);
+      } catch (err) {
+        thinking.textContent = "Error: " + err.message + ". Is the server and Ollama running?";
+      } finally {
+        send.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>
