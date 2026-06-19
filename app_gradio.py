@@ -43,8 +43,7 @@ def generate(query, edit, strength, steps):
     return src, out
 
 
-# ---------- UI (ui-ux-pro: Soft theme, one primary CTA per panel, visible
-# labels + helper text, accessible contrast, loading handled by Gradio) ----------
+# ---------- UI ----------
 
 with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue"), title="Multimodal RAG") as demo:
     gr.Markdown(

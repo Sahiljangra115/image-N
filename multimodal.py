@@ -21,10 +21,6 @@ globally rank a mixed list. We return top-n text + top-1 image. Add a router or
 score-normalization only if "always show both" proves wrong.
 """
 
-# rag and image_rag are imported lazily inside each function: importing them
-# loads their embedders (BGE / CLIP-L) on the GPU. On 4GB we only want to pay
-# for the models a given mode actually uses (-t needs BGE, -i needs CLIP).
-
 TEXT_PATH = "data/maya_binder.txt"   # or a folder of docs
 IMAGE_FOLDER = "data/images"
 

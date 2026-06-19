@@ -17,7 +17,7 @@ import glob
 import json
 import os
 
-# validation split = 1000 images, a good dev size. Swap to train-* to scale up.
+# Swap to train-* to scale up.
 SRC = glob.glob(
     "/home/ladliju/.cache/huggingface/hub/datasets--jxie--flickr8k/"
     "snapshots/*/data/validation-*.parquet"
@@ -44,7 +44,6 @@ def main() -> None:
     with open(CAP_FILE, "w") as f:
         json.dump(captions, f)
 
-    # ponytail: cheap sanity check instead of a test file
     assert len(captions) == table.num_rows
     assert len(os.listdir(OUT_DIR)) == table.num_rows
     print(f"OK. {table.num_rows} images -> {OUT_DIR}/, captions -> {CAP_FILE}")

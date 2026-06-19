@@ -24,17 +24,12 @@ import docx
 import openpyxl
 import faiss
 
-# Use GPU when present, fall back to CPU (HF Spaces free tier has no GPU).
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# BGE small: 384-dim, better retrieval quality than MiniLM.
 EMBEDDER = SentenceTransformer("BAAI/bge-small-en-v1.5", device=DEVICE)
 # BGE requires this prefix on queries only (not chunks) for retrieval tasks.
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
-# Reranker: a cross-encoder reads (query, chunk) together and scores relevance.
-# Slower than the bi-encoder above, so we only run it on the few FAISS candidates.
-# Lazy-loaded so `check`/eval that skip reranking don't pay the load cost.
 _RERANKER = None
 
 
@@ -63,11 +58,9 @@ def _load_pdf(path: str) -> str:
 def _load_docx(path: str) -> str:
     doc = docx.Document(path)
     text_parts = []
-    # Extract paragraphs
     for p in doc.paragraphs:
         if p.text.strip():
             text_parts.append(p.text)
-    # Extract tables
     for table in doc.tables:
         for row in table.rows:
             row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
@@ -153,15 +146,14 @@ def build_faiss(vectors: np.ndarray) -> faiss.Index:
       - under ~10k vectors: IndexFlatIP, exact + instant. HNSW here would only
         lose recall for no speed gain.
       - at scale: IndexHNSWFlat, approximate nearest-neighbour (the friend's
-        trick), trades a little recall for big speed on millions of vectors.
-    ponytail: 10k threshold is a heuristic; tune if your N sits near it."""
+        trick), trades a little recall for big speed on millions of vectors."""
     vectors = np.ascontiguousarray(vectors, dtype="float32")
     d = vectors.shape[1]
     if vectors.shape[0] < 10000:
         index = faiss.IndexFlatIP(d)
     else:
-        index = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT)  # M=32 graph degree
-        index.hnsw.efSearch = 64   # search-time breadth; higher = better recall, slower
+        index = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT)
+        index.hnsw.efSearch = 64
     index.add(vectors)
     return index
 
@@ -169,10 +161,10 @@ def build_faiss(vectors: np.ndarray) -> faiss.Index:
 def retrieve(query: str, chunks: list[str], index: faiss.IndexFlatIP, k: int = 3) -> list[str]:
     """Return the `k` chunks whose vectors are most similar to the query's vector.
     FAISS does the nearest-neighbour search instead of a manual numpy scan."""
-    q = EMBEDDER.encode([BGE_QUERY_PREFIX + query], normalize_embeddings=True)  # shape (1, 384), no [0]
+    q = EMBEDDER.encode([BGE_QUERY_PREFIX + query], normalize_embeddings=True)
     q = np.ascontiguousarray(q, dtype="float32")
-    scores, top_idx = index.search(q, k)       # both shape (1, k)
-    return [chunks[i] for i in top_idx[0]]     # top_idx[0] is the k indices for our one query
+    scores, top_idx = index.search(q, k)
+    return [chunks[i] for i in top_idx[0]]
 
 
 def rerank(query: str, candidates: list[str], k: int = 3) -> list[str]:
@@ -182,8 +174,8 @@ def rerank(query: str, candidates: list[str], k: int = 3) -> list[str]:
     if not candidates:
         return []
     pairs = [(query, c) for c in candidates]
-    scores = _get_reranker().predict(pairs)        # one relevance score per candidate
-    order = np.argsort(scores)[::-1][:k]           # highest score first, keep k
+    scores = _get_reranker().predict(pairs)
+    order = np.argsort(scores)[::-1][:k]
     return [candidates[i] for i in order]
 
 

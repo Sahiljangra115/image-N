@@ -25,13 +25,11 @@ DATA_PATH = os.environ.get("DATA_PATH", "data/maya_binder.txt")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup: build the index once, stash it on app.state
     chunks, index = rag.build_index(DATA_PATH)
     app.state.chunks = chunks
     app.state.index = index
     print(f"Index ready: {len(chunks)} chunks from {DATA_PATH}")
     yield
-    # shutdown: nothing to clean up
 
 
 app = FastAPI(title="Maya RAG", lifespan=lifespan)

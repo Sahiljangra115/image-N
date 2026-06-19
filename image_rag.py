@@ -26,14 +26,10 @@ import numpy as np
 import torch
 import os
 
-import rag  # reuse build_faiss, save_index, load_index, DEVICE
+import rag
 
-DEVICE = rag.DEVICE   # "cuda" if a GPU is present, else "cpu"
+DEVICE = rag.DEVICE
 
-# CLIP: text AND image in ONE shared space. That shared space is the entire
-# reason a text query can be compared to an image. ViT-L-14 (768-dim) separates
-# scores better than B-32, so recall@1 climbs and we can feed the LLM just the
-# top image instead of 5. Cost is paid once at embed time, not per query.
 CLIP = SentenceTransformer("clip-ViT-L-14", device=DEVICE)
 
 IMAGE_INDEX = "data/image_index"
@@ -87,7 +83,7 @@ def build_image_index(folder: str):
         new = [p for p in current if p not in set(paths)]
         if new:
             print(f"Embedding {len(new)} new images (skipping {len(paths)} cached)...")
-            vectors = np.vstack([vectors, embed_images(new)])  # append keeps path/vector alignment
+            vectors = np.vstack([vectors, embed_images(new)])
             paths = paths + new
             rag.save_index(paths, vectors, folder=IMAGE_INDEX)
         else:
@@ -101,9 +97,6 @@ def build_image_index(folder: str):
     return paths, rag.build_faiss(vectors)
 
 
-# SmolVLM-500M: tiny vision-language model (~1GB) for grounded answers. Runs via
-# transformers (not Ollama), far less VRAM than gemma. Honest tradeoff: it is a
-# 500M model, so answers are rougher. Lazy-loaded so retrieval/eval skip it.
 _VLM = None
 _VLM_PROC = None
 _VLM_NAME = "HuggingFaceTB/SmolVLM-500M-Instruct"
@@ -113,7 +106,7 @@ def _get_vlm():
     global _VLM, _VLM_PROC
     if _VLM is None:
         from transformers import AutoProcessor, AutoModelForImageTextToText
-        dtype = torch.float16 if DEVICE == "cuda" else torch.float32  # fp16 is GPU-only
+        dtype = torch.float16 if DEVICE == "cuda" else torch.float32
         _VLM_PROC = AutoProcessor.from_pretrained(_VLM_NAME)
         _VLM = AutoModelForImageTextToText.from_pretrained(
             _VLM_NAME, dtype=dtype
@@ -131,7 +124,7 @@ def vlm_answer(image_paths: list[str], instruction: str, max_new_tokens: int = 2
                                     add_generation_prompt=True)
     inputs = proc(text=text, images=images, return_tensors="pt").to(DEVICE)
     gen = model.generate(**inputs, max_new_tokens=max_new_tokens)
-    trimmed = gen[:, inputs["input_ids"].shape[1]:]   # drop the prompt tokens
+    trimmed = gen[:, inputs["input_ids"].shape[1]:]
     return proc.batch_decode(trimmed, skip_special_tokens=True)[0].strip()
 
 
@@ -153,9 +146,7 @@ def answer_with_image(folder: str, query: str) -> tuple[str, str]:
     return generate_vision(query, best), best
 
 
-# Stable Diffusion Turbo: 1-2 step image-to-image generator (~1.7GB, the
-# friend's hardware trick). Lazy-loaded so retrieval/eval never pay for it.
-# ponytail: CLIP-L + SD Turbo together is ~3.4GB on 4GB. If this OOMs, set
+# CLIP-L + SD Turbo together is ~3.4GB on 4GB. If this OOMs, set
 # CLIP device="cpu" (top of file) or run generation as a separate process.
 _SD = None
 
@@ -168,14 +159,12 @@ def _get_sd():
             _SD = AutoPipelineForImage2Image.from_pretrained(
                 "stabilityai/sd-turbo", torch_dtype=torch.float16, variant="fp16"
             )
-            # offload manages device: streams layers to GPU one at a time (<3GB),
-            # VAE slicing trims the decode peak. Fits 4GB. Turbo is 1-step.
             _SD.enable_sequential_cpu_offload()
             _SD.enable_vae_slicing()
         else:
             _SD = AutoPipelineForImage2Image.from_pretrained(
                 "stabilityai/sd-turbo", torch_dtype=torch.float32
-            ).to("cpu")   # offload is CUDA-only; run plain on CPU (slow)
+            ).to("cpu")   # offload is CUDA-only
     return _SD
 
 
@@ -203,7 +192,7 @@ def modify_image(image_path: str, prompt: str, strength: float = 0.6,
     import time
     import torch
 
-    _free_clip()          # reclaim ~1.7GB before loading SD
+    _free_clip()
     pipe = _get_sd()
     gen = torch.Generator().manual_seed(seed) if seed is not None else None
     init = Image.open(image_path).convert("RGB").resize((512, 512))

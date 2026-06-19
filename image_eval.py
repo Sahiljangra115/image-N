@@ -24,10 +24,8 @@ def main() -> None:
     paths, index = image_rag.build_image_index("data/images")
     caps = json.load(open("data/captions.json"))
 
-    # row position of each image, so we can check "did MY image come back"
     pos = {os.path.basename(p): i for i, p in enumerate(paths)}
 
-    # one query per image (caption_0). Batch-encode all at once: fast.
     names = list(caps.keys())
     queries = [caps[n][0] for n in names]
     qv = np.ascontiguousarray(

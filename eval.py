@@ -40,5 +40,4 @@ def hit_rate(k: int = 3) -> float:
 
 if __name__ == "__main__":
     score = hit_rate(k=3)
-    # fail loudly if retrieval regresses below a floor
     assert score >= 0.75, "retrieval quality dropped below 75%"
